@@ -38,8 +38,13 @@ export class SqsCloudtrailStack extends cdk.Stack {
       enforceSSL: true,
     });
 
+    // バケットポリシーを明示的に作成
+    const bucketPolicy = new s3.BucketPolicy(this, "BucketPolicy", {
+      bucket: bucket,
+    });
+
     // CloudTrailのアクセス権を付与
-    bucket.addToResourcePolicy(
+    bucketPolicy.document.addStatements(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal("cloudtrail.amazonaws.com")],
@@ -48,7 +53,7 @@ export class SqsCloudtrailStack extends cdk.Stack {
       })
     );
 
-    bucket.addToResourcePolicy(
+    bucketPolicy.document.addStatements(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal("cloudtrail.amazonaws.com")],
@@ -94,5 +99,8 @@ export class SqsCloudtrailStack extends cdk.Stack {
         },
       ],
     });
+
+    // 明示的に依存関係を定義
+    trail.node.addDependency(bucketPolicy);
   }
 }
