@@ -32,33 +32,30 @@ export class SqsCloudtrailStack extends cdk.Stack {
     );
 
     // 証憑を格納するS3
-    const bucket = new s3.Bucket(this, "Bucket", {
+    const trailBucket = new s3.Bucket(this, "TrailBucket", {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       encryptionKey: cmk,
       enforceSSL: true,
     });
 
     // バケットポリシーを明示的に作成
-    const bucketPolicy = new s3.BucketPolicy(this, "BucketPolicy", {
-      bucket: bucket,
+    const trailBucketPolicy = new s3.BucketPolicy(this, "TrailBucketPolicy", {
+      bucket: trailBucket,
     });
 
     // CloudTrailのアクセス権を付与
-    bucketPolicy.document.addStatements(
+    trailBucketPolicy.document.addStatements(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal("cloudtrail.amazonaws.com")],
         actions: ["s3:GetBucketAcl"],
-        resources: [bucket.bucketArn],
-      })
-    );
-
-    bucketPolicy.document.addStatements(
+        resources: [trailBucket.bucketArn],
+      }),
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal("cloudtrail.amazonaws.com")],
         actions: ["s3:PutObject"],
-        resources: [bucket.arnForObjects(`AWSLogs/${this.account}/*`)],
+        resources: [trailBucket.arnForObjects(`*`)],
         conditions: {
           StringEquals: {
             "s3:x-amz-acl": "bucket-owner-full-control",
@@ -77,13 +74,13 @@ export class SqsCloudtrailStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal("cloudtrail.amazonaws.com"),
     });
     logGroup.grantWrite(logRole);
-    bucket.grantWrite(logRole);
+    trailBucket.grantWrite(logRole);
     cmk.grantEncryptDecrypt(logRole);
 
     // CloudTrail
     const trail = new cloudtrail.CfnTrail(this, "Trail", {
       isLogging: true,
-      s3BucketName: bucket.bucketName,
+      s3BucketName: trailBucket.bucketName,
       kmsKeyId: cmk.keyArn,
       isMultiRegionTrail: false,
       includeGlobalServiceEvents: false,
@@ -98,9 +95,10 @@ export class SqsCloudtrailStack extends cdk.Stack {
           ],
         },
       ],
+      s3KeyPrefix: "AWS-SQS-Queue",
     });
 
     // 明示的に依存関係を定義
-    trail.node.addDependency(bucketPolicy);
+    trail.node.addDependency(trailBucketPolicy);
   }
 }
